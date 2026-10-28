@@ -6,6 +6,8 @@ Sistema da agência TRAME no estilo Trello: um quadro por cliente, colunas e car
 - **Checklist de peças:** cada cartão tem a lista de peças a entregar, com responsável, prazo e anexo da peça pronta. A equipe e o cliente veem o progresso (ex.: 3/5).
 - **Ver como cliente:** a equipe pode ver o quadro exatamente como o cliente enxerga.
 
+Endereço: https://trametrello.vercel.app
+
 Stack: Next.js 16 + TypeScript + Tailwind, Supabase (Postgres, Auth, Storage, Realtime), dnd-kit. Hospedagem: Vercel + Supabase.
 
 ## Papéis
