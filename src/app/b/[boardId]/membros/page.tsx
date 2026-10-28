@@ -6,6 +6,7 @@ import { requireProfile } from "@/lib/supabase/server";
 import { displayName, type Board, type Member } from "@/lib/types";
 import { cancelInvite, removeMember, updateMember } from "./actions";
 import { AccessSelect, InviteForm } from "./InviteForm";
+import { BoardSettings } from "./BoardSettings";
 
 const ACCESS_LABEL = { edit: "Pode editar", comment: "Comenta e move", view: "Só vê" } as const;
 
@@ -30,6 +31,8 @@ export default async function MembersPage({ params }: PageProps<"/b/[boardId]/me
         </Link>
       </TopBar>
       <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
+        <BoardSettings board={b} canDelete={profile.is_admin} />
+
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Membros do quadro</h1>
           <p className="mt-1 text-sm text-slate-500">

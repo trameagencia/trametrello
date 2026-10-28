@@ -14,7 +14,7 @@ export default async function BoardPage({ params }: PageProps<"/b/[boardId]">) {
         {board.client_name && <span className="hidden truncate text-slate-400 sm:inline">{board.client_name}</span>}
         {permissions.isTeam && (
           <Link href={`/b/${board.id}/membros`} className="rounded px-2 py-1 text-slate-300 hover:bg-white/10 hover:text-white">
-            Membros
+            Configurar quadro
           </Link>
         )}
       </TopBar>

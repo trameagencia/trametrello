@@ -16,7 +16,16 @@ export default async function Home() {
         {boards && boards.length > 0 ? (
           <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {boards.map((b) => (
-              <li key={b.id}>
+              <li key={b.id} className="relative">
+                {profile.is_admin && (
+                  <Link
+                    href={`/b/${b.id}/membros`}
+                    title="Editar ou excluir quadro"
+                    className="absolute top-2 right-2 rounded px-2 py-0.5 text-sm text-white/80 hover:bg-black/20 hover:text-white"
+                  >
+                    ⚙
+                  </Link>
+                )}
                 <Link
                   href={`/b/${b.id}`}
                   className="block h-24 rounded-lg p-4 text-white shadow-sm transition hover:brightness-110"
