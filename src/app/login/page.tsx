@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { buttonPrimary, inputBase } from "@/components/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,35 +21,37 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-slate-900">TRAME</h1>
-        <p className="mt-1 text-sm text-slate-500">Entre com seu e-mail. Enviamos um link de acesso.</p>
-        {status === "sent" ? (
-          <p className="mt-6 rounded-md bg-teal-50 p-3 text-sm text-teal-800">
-            Pronto! Abra o link que enviamos para <strong>{email}</strong>.
-          </p>
-        ) : (
-          <form onSubmit={onSubmit} className="mt-6 space-y-3">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="voce@empresa.com.br"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-            />
-            <button
-              disabled={status === "sending"}
-              className="w-full rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
-            >
-              {status === "sending" ? "Enviando…" : "Receber link de acesso"}
-            </button>
-            {status === "error" && (
-              <p className="text-sm text-red-600">Não foi possível enviar. Confira o e-mail e tente de novo.</p>
+    <main className="flex min-h-screen flex-col bg-trame">
+      <div className="flex flex-1 items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <Image src="/trame-logo.png" alt="TRAME" width={308} height={67} priority className="mx-auto h-10 w-auto" />
+          <div className="mt-10 rounded-3xl bg-white/90 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.12)] backdrop-blur">
+            <h1 className="text-[22px] font-semibold tracking-tight text-ink">Entrar</h1>
+            <p className="mt-1 text-[15px] text-ink-2">Enviamos um link de acesso para o seu e-mail.</p>
+            {status === "sent" ? (
+              <p className="mt-6 rounded-2xl bg-[#34c759]/12 p-4 text-[15px] text-[#1a7f37]">
+                Pronto! Abra o link que enviamos para <strong>{email}</strong>.
+              </p>
+            ) : (
+              <form onSubmit={onSubmit} className="mt-6 space-y-3">
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@empresa.com.br"
+                  className={`${inputBase} w-full`}
+                />
+                <button disabled={status === "sending"} className={`${buttonPrimary} w-full py-2.5`}>
+                  {status === "sending" ? "Enviando…" : "Receber link de acesso"}
+                </button>
+                {status === "error" && (
+                  <p className="text-sm text-[#d70015]">Não foi possível enviar. Confira o e-mail e tente de novo.</p>
+                )}
+              </form>
             )}
-          </form>
-        )}
+          </div>
+        </div>
       </div>
     </main>
   );

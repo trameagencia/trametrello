@@ -20,6 +20,7 @@ export async function loadBoard(boardId: string) {
       .from("cards")
       .select("*, checklist_items(done), comments(count), attachments(count), card_assignees(user_id)")
       .eq("board_id", boardId)
+      .is("archived_at", null)
       .order("position"),
     supabase
       .from("board_members")

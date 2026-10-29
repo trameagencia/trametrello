@@ -14,6 +14,8 @@ const DEFAULT_COLUMNS = [
   { name: "Publicado", team_only: false },
 ];
 
+const BOARD_COLORS = ["#0a84ff", "#30d158", "#ff9f0a", "#bf5af2", "#ff375f", "#5e5ce6", "#64d2ff", "#ac8e68"];
+
 export async function createBoard(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const clientName = String(formData.get("client_name") ?? "").trim();
@@ -22,7 +24,7 @@ export async function createBoard(formData: FormData) {
   const supabase = await createClient();
   const { data: board, error } = await supabase
     .from("boards")
-    .insert({ name, client_name: clientName || null })
+    .insert({ name, client_name: clientName || null, color: BOARD_COLORS[Math.floor(Math.random() * BOARD_COLORS.length)] })
     .select("id")
     .single();
   if (error || !board) throw new Error(error?.message ?? "Não foi possível criar o quadro");

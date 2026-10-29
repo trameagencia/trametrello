@@ -62,3 +62,12 @@ insert into storage.objects (bucket_id, name, owner) values ('attachments','b000
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000003';
 select count(*) cliente_ve_arquivo from storage.objects;
 update profiles set is_admin = true where id = '00000000-0000-0000-0000-000000000003';
+\echo '--- 0002: concluir cartão'
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000004';
+select set_card_completed('d0000000-0000-0000-0000-000000000001', true);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+select set_card_completed('d0000000-0000-0000-0000-000000000001', true);
+select title, completed_at is not null as concluido from cards order by title;
+insert into checklist_items (card_id, title, parent_id) values ('d0000000-0000-0000-0000-000000000001','Sub-peça','e0000000-0000-0000-0000-000000000001');
+update cards set archived_at = now() where id = 'd0000000-0000-0000-0000-000000000002';
+select title, archived_at is not null as arquivado from cards order by title;

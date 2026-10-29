@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { TopBar } from "@/components/TopBar";
+import { NavLink, TopBar } from "@/components/TopBar";
 import { BoardView } from "@/components/BoardView";
 import { loadBoard } from "./data";
 
@@ -8,15 +7,10 @@ export default async function BoardPage({ params }: PageProps<"/b/[boardId]">) {
   const { profile, board, columns, cards, members, permissions } = await loadBoard(boardId);
 
   return (
-    <div className="flex h-screen flex-col" style={{ backgroundColor: board.color }}>
+    <div className="flex h-screen flex-col bg-canvas">
       <TopBar profile={profile}>
-        <span className="truncate font-medium">{board.name}</span>
-        {board.client_name && <span className="hidden truncate text-slate-400 sm:inline">{board.client_name}</span>}
-        {permissions.isTeam && (
-          <Link href={`/b/${board.id}/membros`} className="rounded px-2 py-1 text-slate-300 hover:bg-white/10 hover:text-white">
-            Configurar quadro
-          </Link>
-        )}
+        <NavLink href="/">Quadros</NavLink>
+        {permissions.isTeam && <NavLink href={`/b/${board.id}/membros`}>Configurar quadro</NavLink>}
       </TopBar>
       <BoardView
         board={board}
