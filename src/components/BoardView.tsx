@@ -27,7 +27,8 @@ import {
   type Permissions,
 } from "@/lib/types";
 import { CardModal } from "./CardModal";
-import { Avatar, LabelChip, LockIcon, formatDate } from "./ui";
+import { ArchivedPanel } from "./ArchivedPanel";
+import { Avatar, CheckCircle, LabelChip, LockIcon, buttonSecondary, formatDate } from "./ui";
 
 type Props = {
   board: Board;
@@ -52,7 +53,8 @@ export function BoardView({ board, columns, cards, members, permissions, current
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [viewAsClient, setViewAsClient] = useState(false);
-  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [openCard, setOpenCard] = useState<{ id: string; archived?: CardSummary } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [cardMap, setCardMap] = useState(() => new Map(cards.map((c) => [c.id, c])));
   const [layout, setLayout] = useState(() => buildLayout(columns, cards));
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -156,6 +158,13 @@ export function BoardView({ board, columns, cards, members, permissions, current
     refresh();
   }
 
+  async function toggleComplete(card: CardSummary, done: boolean) {
+    setCardMap((prev) => new Map(prev).set(card.id, { ...card, completed_at: done ? new Date().toISOString() : null }));
+    const { error } = await supabase.rpc("set_card_completed", { p_card: card.id, p_done: done });
+    if (error) setError(error.message);
+    refresh();
+  }
+
   async function addColumn() {
     const name = prompt("Nome da nova coluna");
     if (!name?.trim()) return;
@@ -167,26 +176,54 @@ export function BoardView({ board, columns, cards, members, permissions, current
     refresh();
   }
 
-  const openCard = openCardId ? cardMap.get(openCardId) : undefined;
+  const modalCard = openCard ? (openCard.archived ?? cardMap.get(openCard.id)) : undefined;
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-3 px-4 py-2 text-sm text-white">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-5 pb-3 sm:px-6">
+        <div className="mr-auto flex min-w-0 items-center gap-3">
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: board.color }} />
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-ink">{board.name}</h1>
+          {board.client_name && <span className="hidden truncate text-[15px] text-ink-2 sm:inline">{board.client_name}</span>}
+        </div>
         {permissions.isTeam && (
-          <label className="flex cursor-pointer items-center gap-2 rounded bg-black/20 px-3 py-1.5 hover:bg-black/30">
-            <input type="checkbox" checked={viewAsClient} onChange={(e) => setViewAsClient(e.target.checked)} />
-            Ver como cliente
-          </label>
+          <div className="flex rounded-full bg-black/[0.05] p-0.5 text-sm" role="tablist" aria-label="Modo de visualização">
+            {[
+              { label: "Equipe", value: false },
+              { label: "Ver como cliente", value: true },
+            ].map((opt) => (
+              <button
+                key={opt.label}
+                role="tab"
+                aria-selected={viewAsClient === opt.value}
+                onClick={() => setViewAsClient(opt.value)}
+                className={`rounded-full px-3 py-1 transition ${
+                  viewAsClient === opt.value ? "bg-white font-medium text-ink shadow-sm" : "text-ink-2 hover:text-ink"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         )}
-        {viewAsClient && <span className="text-white/80">Colunas só da equipe estão escondidas, como o cliente vê.</span>}
-        {error && (
-          <button onClick={() => setError(null)} className="ml-auto rounded bg-red-600 px-3 py-1.5">
-            {error} ✕
-          </button>
-        )}
+        <button onClick={() => setShowArchived(true)} className={`${buttonSecondary} py-1.5`}>
+          Arquivados
+        </button>
       </div>
 
+      {(viewAsClient || error) && (
+        <div className="flex items-center gap-3 px-4 pb-2 text-sm sm:px-6">
+          {viewAsClient && <span className="text-ink-2">As colunas só da equipe estão escondidas, como o cliente vê.</span>}
+          {error && (
+            <button onClick={() => setError(null)} className="ml-auto rounded-full bg-[#ff3b30] px-3 py-1 text-white">
+              {error} ×
+            </button>
+          )}
+        </div>
+      )}
+
       <DndContext
+        id={`dnd-${board.id}`}
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={onDragStart}
@@ -197,7 +234,7 @@ export function BoardView({ board, columns, cards, members, permissions, current
           setLayout(buildLayout(columns, [...cardMap.values()]));
         }}
       >
-        <div className="flex flex-1 items-start gap-3 overflow-x-auto px-4 pb-4">
+        <div className="scroll-soft flex flex-1 items-start gap-4 overflow-x-auto px-4 pb-6 sm:px-6">
           {visibleColumns.map((column) => (
             <ColumnView
               key={column.id}
@@ -207,7 +244,8 @@ export function BoardView({ board, columns, cards, members, permissions, current
               members={members}
               permissions={permissions}
               canDrag={canDrag}
-              onOpen={setOpenCardId}
+              onOpen={(id) => setOpenCard({ id })}
+              onToggleComplete={toggleComplete}
               onChanged={refresh}
               onError={setError}
             />
@@ -215,7 +253,7 @@ export function BoardView({ board, columns, cards, members, permissions, current
           {permissions.isTeam && !viewAsClient && (
             <button
               onClick={addColumn}
-              className="w-72 shrink-0 rounded-xl bg-white/20 px-3 py-2.5 text-left text-sm font-medium text-white hover:bg-white/30"
+              className="w-[280px] shrink-0 rounded-2xl border border-dashed border-black/15 px-4 py-3 text-left text-sm font-medium text-ink-2 transition hover:border-black/25 hover:bg-white/60 hover:text-ink"
             >
               + Adicionar coluna
             </button>
@@ -223,20 +261,33 @@ export function BoardView({ board, columns, cards, members, permissions, current
         </div>
         <DragOverlay>
           {draggingId && cardMap.get(draggingId) ? (
-            <CardTile card={cardMap.get(draggingId)!} members={members} dragging />
+            <CardTile card={cardMap.get(draggingId)!} members={members} dragging canComplete={false} />
           ) : null}
         </DragOverlay>
       </DndContext>
 
-      {openCard && (
+      {showArchived && (
+        <ArchivedPanel
+          boardId={board.id}
+          permissions={permissions}
+          onClose={() => setShowArchived(false)}
+          onOpen={(card) => setOpenCard({ id: card.id, archived: card })}
+          onChanged={refresh}
+        />
+      )}
+
+      {modalCard && (
         <CardModal
-          card={openCard}
+          card={modalCard}
           columns={columns.filter((c) => permissions.isTeam || !c.team_only)}
           members={members}
           permissions={permissions}
           currentUserId={currentUserId}
-          onClose={() => setOpenCardId(null)}
-          onChanged={refresh}
+          onClose={() => setOpenCard(null)}
+          onChanged={() => {
+            refresh();
+            if (openCard?.archived) setOpenCard(null);
+          }}
         />
       )}
     </>
@@ -251,6 +302,7 @@ function ColumnView({
   permissions,
   canDrag,
   onOpen,
+  onToggleComplete,
   onChanged,
   onError,
 }: {
@@ -261,6 +313,7 @@ function ColumnView({
   permissions: Permissions;
   canDrag: boolean;
   onOpen: (id: string) => void;
+  onToggleComplete: (card: CardSummary, done: boolean) => void;
   onChanged: () => void;
   onError: (msg: string) => void;
 }) {
@@ -307,52 +360,63 @@ function ColumnView({
 
   return (
     <section
-      className={`flex max-h-full w-72 shrink-0 flex-col rounded-xl ${
-        column.team_only ? "bg-amber-50 ring-2 ring-amber-400" : "bg-slate-100"
+      className={`flex max-h-full w-[280px] shrink-0 flex-col rounded-2xl ${
+        column.team_only ? "bg-[#fff6cc]/80 ring-1 ring-[#e6c200]/40" : "bg-[#ebebf0]/80"
       }`}
     >
-      <header className="relative flex items-center gap-2 px-3 pt-2.5 pb-1">
-        {column.team_only && (
-          <span title="Só a equipe vê esta coluna" className="text-amber-600">
-            <LockIcon />
-          </span>
-        )}
-        <h2 className="flex-1 truncate text-sm font-semibold text-slate-800">{column.name}</h2>
-        <span className="text-xs text-slate-500">{cardIds.length}</span>
+      <header className="relative flex items-center gap-2 px-3.5 pt-3 pb-1.5">
+        <h2 className="flex-1 truncate text-[15px] font-semibold text-ink">{column.name}</h2>
+        <span className="rounded-full bg-black/[0.06] px-2 py-0.5 text-xs font-medium text-ink-2 tabular-nums">{cardIds.length}</span>
         {permissions.isTeam && (
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded px-1.5 text-slate-500 hover:bg-black/5"
+            className="rounded-full px-2 py-0.5 text-ink-2 transition hover:bg-black/5 hover:text-ink"
             aria-label="Opções da coluna"
           >
-            ⋯
+            •••
           </button>
         )}
         {menuOpen && (
-          <div className="absolute top-9 right-2 z-20 w-56 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
-            <button onClick={rename} className="block w-full px-3 py-1.5 text-left hover:bg-slate-100">
-              Renomear
-            </button>
-            <button
-              onClick={() => updateColumn({ team_only: !column.team_only })}
-              className="block w-full px-3 py-1.5 text-left hover:bg-slate-100"
-            >
-              {column.team_only ? "Mostrar para o cliente" : "Deixar só para a equipe"}
-            </button>
-            <button onClick={remove} className="block w-full px-3 py-1.5 text-left text-red-600 hover:bg-red-50">
-              Apagar coluna
-            </button>
-          </div>
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="absolute top-10 right-2 z-20 w-60 overflow-hidden rounded-xl border border-line bg-white/95 py-1 text-sm shadow-xl backdrop-blur">
+              <button onClick={rename} className="block w-full px-3.5 py-2 text-left hover:bg-black/[0.04]">
+                Renomear
+              </button>
+              <button
+                onClick={() => updateColumn({ team_only: !column.team_only })}
+                className="block w-full px-3.5 py-2 text-left hover:bg-black/[0.04]"
+              >
+                {column.team_only ? "Mostrar para o cliente" : "Deixar só para a equipe"}
+              </button>
+              <div className="my-1 h-px bg-line" />
+              <button onClick={remove} className="block w-full px-3.5 py-2 text-left text-[#d70015] hover:bg-[#ff3b30]/5">
+                Apagar coluna
+              </button>
+            </div>
+          </>
         )}
       </header>
-      {column.team_only && <p className="px-3 text-xs text-amber-700">Só a equipe vê esta coluna</p>}
+      {column.team_only && (
+        <p className="mx-3.5 mb-1 inline-flex items-center gap-1.5 text-xs font-medium text-[#8a6d00]">
+          <LockIcon /> Só a equipe vê esta coluna
+        </p>
+      )}
 
-      <div ref={setNodeRef} className="flex min-h-8 flex-col gap-2 overflow-y-auto px-2 py-2">
+      <div ref={setNodeRef} className="scroll-soft flex min-h-10 flex-col gap-2 overflow-y-auto px-2 pt-1 pb-2">
         <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
           {cardIds.map((id) => {
             const card = cardMap.get(id);
             return card ? (
-              <SortableCard key={id} card={card} members={members} disabled={!canDrag} onOpen={() => onOpen(id)} />
+              <SortableCard
+                key={id}
+                card={card}
+                members={members}
+                disabled={!canDrag}
+                canComplete={permissions.canComment}
+                onOpen={() => onOpen(id)}
+                onToggleComplete={(done) => onToggleComplete(card, done)}
+              />
             ) : null;
           })}
         </SortableContext>
@@ -360,7 +424,7 @@ function ColumnView({
 
       {permissions.canEdit &&
         (adding ? (
-          <form onSubmit={addCard} className="px-2 pb-2">
+          <form onSubmit={addCard} className="px-2 pb-2.5">
             <textarea
               autoFocus
               value={title}
@@ -370,12 +434,12 @@ function ColumnView({
                 if (e.key === "Escape") setAdding(false);
               }}
               placeholder="Título do cartão"
-              className="w-full resize-none rounded-md border border-slate-300 bg-white p-2 text-sm"
+              className="w-full resize-none rounded-xl border-0 bg-white p-2.5 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.08)] outline-none focus:ring-4 focus:ring-accent/15"
               rows={2}
             />
-            <div className="mt-1 flex gap-2">
-              <button className="rounded bg-teal-700 px-3 py-1 text-sm text-white">Adicionar</button>
-              <button type="button" onClick={() => setAdding(false)} className="px-2 text-sm text-slate-500">
+            <div className="mt-1.5 flex items-center gap-2">
+              <button className="rounded-full bg-ink px-3.5 py-1.5 text-sm font-medium text-white">Adicionar</button>
+              <button type="button" onClick={() => setAdding(false)} className="px-2 text-sm text-ink-2 hover:text-ink">
                 Cancelar
               </button>
             </div>
@@ -383,7 +447,7 @@ function ColumnView({
         ) : (
           <button
             onClick={() => setAdding(true)}
-            className="mx-2 mb-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-600 hover:bg-black/5"
+            className="mx-2 mb-2.5 rounded-xl px-2.5 py-2 text-left text-sm text-ink-2 transition hover:bg-black/[0.05] hover:text-ink"
           >
             + Adicionar cartão
           </button>
@@ -396,12 +460,16 @@ function SortableCard({
   card,
   members,
   disabled,
+  canComplete,
   onOpen,
+  onToggleComplete,
 }: {
   card: CardSummary;
   members: Member[];
   disabled: boolean;
+  canComplete: boolean;
   onOpen: () => void;
+  onToggleComplete: (done: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -410,53 +478,87 @@ function SortableCard({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
       {...attributes}
       {...listeners}
       onClick={onOpen}
     >
-      <CardTile card={card} members={members} />
+      <CardTile card={card} members={members} canComplete={canComplete} onToggleComplete={onToggleComplete} />
     </div>
   );
 }
 
-function CardTile({ card, members, dragging }: { card: CardSummary; members: Member[]; dragging?: boolean }) {
-  const overdue = card.due_date && card.due_date < new Date().toISOString().slice(0, 10);
+function CardTile({
+  card,
+  members,
+  dragging,
+  canComplete,
+  onToggleComplete,
+}: {
+  card: CardSummary;
+  members: Member[];
+  dragging?: boolean;
+  canComplete: boolean;
+  onToggleComplete?: (done: boolean) => void;
+}) {
+  const completed = !!card.completed_at;
+  const overdue = !completed && card.due_date && card.due_date < new Date().toISOString().slice(0, 10);
   const allDone = card.checklist_total > 0 && card.checklist_done === card.checklist_total;
   return (
     <article
-      className={`cursor-pointer rounded-lg bg-white p-2.5 text-sm shadow-sm ring-1 ring-black/5 hover:ring-teal-600 ${
-        dragging ? "rotate-2 shadow-lg" : ""
+      className={`group cursor-pointer rounded-xl bg-white p-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.05)] transition hover:shadow-[0_4px_14px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.06)] ${
+        dragging ? "rotate-[1.5deg] shadow-[0_12px_32px_rgba(0,0,0,0.18)]" : ""
       }`}
     >
       {card.labels.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap gap-1">
           {card.labels.map((l) => (
             <LabelChip key={l} label={l} />
           ))}
         </div>
       )}
-      <p className="text-slate-800">{card.title}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        {card.due_date && (
-          <span className={`rounded px-1.5 py-0.5 ${overdue ? "bg-red-100 text-red-700" : "bg-slate-100"}`}>
-            📅 {formatDate(card.due_date)}
-          </span>
-        )}
-        {card.checklist_total > 0 && (
-          <span className={`rounded px-1.5 py-0.5 ${allDone ? "bg-green-100 text-green-700" : "bg-slate-100"}`}>
-            ☑ {card.checklist_done}/{card.checklist_total}
-          </span>
-        )}
-        {card.comment_count > 0 && <span>💬 {card.comment_count}</span>}
-        {card.attachment_count > 0 && <span>📎 {card.attachment_count}</span>}
-        <span className="ml-auto flex -space-x-1">
-          {card.assignee_ids.map((id) => {
-            const m = members.find((m) => m.user_id === id);
-            return m ? <Avatar key={id} profile={m.profile} size="sm" /> : null;
-          })}
+      <div className="flex items-start gap-2">
+        <span
+          className={`mt-px transition-all ${
+            completed || !canComplete ? "" : "w-0 overflow-hidden opacity-0 group-hover:w-5 group-hover:opacity-100"
+          } ${!completed && !canComplete ? "hidden" : ""}`}
+        >
+          <CheckCircle
+            size="sm"
+            checked={completed}
+            disabled={!canComplete}
+            onChange={onToggleComplete}
+            label={completed ? "Marcar como não concluído" : "Marcar como concluído"}
+          />
         </span>
+        <p className={`min-w-0 flex-1 leading-snug ${completed ? "text-ink-2" : "text-ink"}`}>{card.title}</p>
       </div>
+      {(card.due_date || card.checklist_total > 0 || card.comment_count > 0 || card.attachment_count > 0 || card.assignee_ids.length > 0) && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
+          {card.due_date && (
+            <span
+              className={`rounded-full px-2 py-0.5 font-medium ${
+                completed ? "bg-[#34c759]/15 text-[#1a7f37]" : overdue ? "bg-[#ff3b30]/12 text-[#d70015]" : "bg-black/[0.05]"
+              }`}
+            >
+              {formatDate(card.due_date)}
+            </span>
+          )}
+          {card.checklist_total > 0 && (
+            <span className={`rounded-full px-2 py-0.5 font-medium tabular-nums ${allDone ? "bg-[#34c759]/15 text-[#1a7f37]" : "bg-black/[0.05]"}`}>
+              ✓ {card.checklist_done}/{card.checklist_total}
+            </span>
+          )}
+          {card.comment_count > 0 && <span className="px-1">💬 {card.comment_count}</span>}
+          {card.attachment_count > 0 && <span className="px-1">📎 {card.attachment_count}</span>}
+          <span className="ml-auto flex -space-x-1.5">
+            {card.assignee_ids.map((id) => {
+              const m = members.find((m) => m.user_id === id);
+              return m ? <Avatar key={id} profile={m.profile} size="sm" /> : null;
+            })}
+          </span>
+        </div>
+      )}
     </article>
   );
 }

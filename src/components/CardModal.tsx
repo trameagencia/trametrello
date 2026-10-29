@@ -13,7 +13,21 @@ import {
   type Member,
   type Permissions,
 } from "@/lib/types";
-import { Avatar, LabelChip, LockIcon, formatDate, formatDateTime } from "./ui";
+import { MentionInput } from "./MentionInput";
+import {
+  Avatar,
+  CheckCircle,
+  LabelChip,
+  LockIcon,
+  MentionText,
+  buttonDanger,
+  buttonPrimary,
+  buttonSecondary,
+  formatDate,
+  formatDateTime,
+  inputBase,
+  mentionedIds,
+} from "./ui";
 
 type Props = {
   card: CardSummary;
@@ -32,6 +46,8 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { canEdit, canComment, isTeam } = permissions;
+  const archived = !!card.archived_at;
+  const completed = !!card.completed_at;
 
   const fetchDetails = useCallback(async () => {
     const [i, c, a] = await Promise.all([
@@ -81,30 +97,67 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
   const profileOf = (id: string | null) => members.find((m) => m.user_id === id)?.profile;
   const column = columns.find((c) => c.id === card.column_id);
   const doneCount = items.filter((i) => i.done).length;
+  const topItems = items.filter((i) => !i.parent_id);
+  const childrenOf = (id: string) => items.filter((i) => i.parent_id === id);
+
+  function addItem(title: string, parentId: string | null) {
+    const siblings = items.filter((i) => i.parent_id === parentId);
+    return run(
+      supabase.from("checklist_items").insert({
+        card_id: card.id,
+        parent_id: parentId,
+        title,
+        position: positionBetween(siblings[siblings.length - 1]?.position),
+      }),
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:p-10" onMouseDown={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/25 p-3 backdrop-blur-sm sm:p-10"
+      onMouseDown={onClose}
+    >
       <div
-        className="w-full max-w-3xl rounded-xl bg-slate-50 shadow-2xl"
+        className="animate-sheet w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-[0_24px_80px_rgba(0,0,0,0.25)]"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal
       >
-        <div className="flex items-start gap-3 border-b border-slate-200 p-5">
+        {archived && (
+          <div className="flex items-center gap-3 bg-[#fff6cc] px-6 py-2.5 text-sm text-[#7a5d00]">
+            <span className="flex-1">Este cartão está arquivado e não aparece no quadro.</span>
+            {canEdit && (
+              <button onClick={() => updateCard({ archived_at: null })} className="font-medium underline">
+                Restaurar
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-start gap-3 px-6 pt-6 pb-4">
+          <span className="mt-1.5">
+            <CheckCircle
+              checked={completed}
+              disabled={!canComment}
+              onChange={(done) => run(supabase.rpc("set_card_completed", { p_card: card.id, p_done: done }))}
+              label={completed ? "Marcar como não concluído" : "Marcar como concluído"}
+            />
+          </span>
           <div className="min-w-0 flex-1">
             <EditableText
               value={card.title}
               disabled={!canEdit}
-              className="w-full text-lg font-semibold text-slate-900"
+              className="w-full text-[22px] leading-tight font-semibold tracking-tight text-ink"
               onSave={(title) => title.trim() && updateCard({ title: title.trim() })}
             />
-            <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-              na coluna
-              {canComment ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm text-ink-2">
+              {completed && <span className="rounded-full bg-[#34c759]/15 px-2 py-0.5 text-xs font-medium text-[#1a7f37]">Concluído</span>}
+              <span>na coluna</span>
+              {canComment && !archived ? (
                 <select
                   value={card.column_id}
                   onChange={(e) => run(supabase.rpc("move_card", { p_card: card.id, p_column: e.target.value, p_position: Date.now() }))}
-                  className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-slate-800"
+                  className="rounded-lg bg-black/[0.05] px-2 py-0.5 font-medium text-ink outline-none"
                 >
                   {columns.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -114,87 +167,94 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
                   ))}
                 </select>
               ) : (
-                <strong className="text-slate-700">{column?.name}</strong>
+                <strong className="font-medium text-ink">{column?.name}</strong>
               )}
               {column?.team_only && (
-                <span className="inline-flex items-center gap-1 text-amber-700">
+                <span className="inline-flex items-center gap-1 text-[#8a6d00]">
                   <LockIcon /> cliente não vê
                 </span>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="rounded p-1 text-xl leading-none text-slate-500 hover:bg-slate-200" aria-label="Fechar">
-            ✕
+          <button onClick={onClose} className="rounded-full p-2 text-ink-2 transition hover:bg-black/5 hover:text-ink" aria-label="Fechar">
+            <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M2 2l10 10M12 2L2 12" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
 
         {error && (
-          <p className="mx-5 mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700" onClick={() => setError(null)}>
+          <p className="mx-6 mb-2 rounded-xl bg-[#ff3b30]/10 px-3 py-2 text-sm text-[#d70015]" onClick={() => setError(null)}>
             {error}
           </p>
         )}
 
-        <div className="grid gap-6 p-5 md:grid-cols-[1fr_200px]">
-          <div className="min-w-0 space-y-6">
+        <div className="grid gap-8 px-6 pb-6 md:grid-cols-[1fr_210px]">
+          <div className="min-w-0 space-y-7">
             <Section title="Descrição">
               {canEdit ? (
-                <EditableText
-                  multiline
-                  value={card.description}
-                  placeholder="Adicione detalhes, briefing, links…"
-                  className="min-h-20 w-full rounded-md border border-slate-200 bg-white p-2 text-sm"
-                  onSave={(description) => updateCard({ description })}
-                />
+                <DescriptionEditor value={card.description} members={members} onSave={(description) => updateCard({ description })} />
               ) : (
-                <p className="text-sm whitespace-pre-wrap text-slate-700">{card.description || "Sem descrição."}</p>
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-ink">
+                  {card.description ? <MentionText text={card.description} members={members} /> : <span className="text-ink-3">Sem descrição.</span>}
+                </p>
               )}
             </Section>
 
-            <Section title={`Peças a entregar ${items.length ? `(${doneCount}/${items.length})` : ""}`}>
+            <Section title="Peças a entregar" aside={items.length ? `${doneCount} de ${items.length}` : undefined}>
               {items.length > 0 && (
-                <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="mb-3 h-1 overflow-hidden rounded-full bg-black/[0.06]">
                   <div
-                    className={`h-full ${doneCount === items.length ? "bg-green-500" : "bg-teal-600"}`}
+                    className={`h-full rounded-full transition-all ${doneCount === items.length ? "bg-[#34c759]" : "bg-accent"}`}
                     style={{ width: `${(doneCount / items.length) * 100}%` }}
                   />
                 </div>
               )}
-              <ul className="space-y-1.5">
-                {items.map((item) => (
-                  <ChecklistRow
-                    key={item.id}
-                    item={item}
-                    members={members}
-                    attachments={attachments.filter((a) => a.checklist_item_id === item.id)}
-                    canEdit={canEdit}
-                    canComment={canComment}
-                    onToggle={(done) => run(supabase.rpc("toggle_checklist_item", { p_item: item.id, p_done: done }))}
-                    onUpdate={(patch) => run(supabase.from("checklist_items").update(patch).eq("id", item.id))}
-                    onDelete={() => run(supabase.from("checklist_items").delete().eq("id", item.id))}
-                    onUpload={(file) => upload(file, item.id)}
-                    onDownload={download}
-                  />
+              <ul className="space-y-1">
+                {topItems.map((item) => (
+                  <li key={item.id}>
+                    <ChecklistRow
+                      item={item}
+                      members={members}
+                      attachments={attachments.filter((a) => a.checklist_item_id === item.id)}
+                      canEdit={canEdit}
+                      canComment={canComment}
+                      onToggle={(done) => run(supabase.rpc("toggle_checklist_item", { p_item: item.id, p_done: done }))}
+                      onUpdate={(patch) => run(supabase.from("checklist_items").update(patch).eq("id", item.id))}
+                      onDelete={() => run(supabase.from("checklist_items").delete().eq("id", item.id))}
+                      onUpload={(file) => upload(file, item.id)}
+                      onDownload={download}
+                      onAddSub={canEdit ? (title) => addItem(title, item.id) : undefined}
+                    />
+                    {childrenOf(item.id).length > 0 && (
+                      <ul className="ml-7 space-y-1 border-l border-line pl-3">
+                        {childrenOf(item.id).map((sub) => (
+                          <li key={sub.id}>
+                            <ChecklistRow
+                              item={sub}
+                              members={members}
+                              attachments={attachments.filter((a) => a.checklist_item_id === sub.id)}
+                              canEdit={canEdit}
+                              canComment={canComment}
+                              small
+                              onToggle={(done) => run(supabase.rpc("toggle_checklist_item", { p_item: sub.id, p_done: done }))}
+                              onUpdate={(patch) => run(supabase.from("checklist_items").update(patch).eq("id", sub.id))}
+                              onDelete={() => run(supabase.from("checklist_items").delete().eq("id", sub.id))}
+                              onUpload={(file) => upload(file, sub.id)}
+                              onDownload={download}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
                 ))}
               </ul>
-              {canEdit && (
-                <AddInline
-                  placeholder="Nova peça (ex.: Arte feed 1080x1350)"
-                  button="Adicionar peça"
-                  onAdd={(title) =>
-                    run(
-                      supabase.from("checklist_items").insert({
-                        card_id: card.id,
-                        title,
-                        position: positionBetween(items[items.length - 1]?.position),
-                      }),
-                    )
-                  }
-                />
-              )}
+              {canEdit && <AddInline placeholder="Nova peça (ex.: Arte feed 1080×1350)" button="Adicionar" onAdd={(title) => addItem(title, null)} />}
             </Section>
 
             <Section title="Anexos">
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {attachments
                   .filter((a) => !a.checklist_item_id)
                   .map((a) => (
@@ -212,31 +272,39 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
 
             <Section title="Comentários">
               {canComment && (
-                <AddInline
-                  multiline
-                  placeholder="Escreva um comentário…"
-                  button="Comentar"
-                  onAdd={(body) => run(supabase.from("comments").insert({ card_id: card.id, author_id: currentUserId, body }))}
+                <CommentComposer
+                  members={members}
+                  onSubmit={(body) =>
+                    run(
+                      supabase.from("comments").insert({
+                        card_id: card.id,
+                        author_id: currentUserId,
+                        body,
+                        mentions: mentionedIds(body, members),
+                      }),
+                    )
+                  }
                 />
               )}
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-4 space-y-4">
                 {[...comments].reverse().map((c) => (
-                  <li key={c.id} className="flex gap-2">
+                  <li key={c.id} className="flex gap-2.5">
                     <Avatar profile={profileOf(c.author_id)} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs text-slate-500">
-                        <strong className="text-slate-800">{displayName(profileOf(c.author_id))}</strong> · {formatDateTime(c.created_at)}
+                      <div className="text-xs text-ink-3">
+                        <strong className="font-semibold text-ink">{displayName(profileOf(c.author_id))}</strong>
+                        <span className="ml-1.5">{formatDateTime(c.created_at)}</span>
                         {(c.author_id === currentUserId || isTeam) && (
                           <button
                             onClick={() => confirm("Apagar este comentário?") && run(supabase.from("comments").delete().eq("id", c.id))}
-                            className="ml-2 text-slate-400 hover:text-red-600"
+                            className="ml-2 hover:text-[#d70015]"
                           >
-                            apagar
+                            Apagar
                           </button>
                         )}
                       </div>
-                      <p className="mt-0.5 rounded-md bg-white p-2 text-sm whitespace-pre-wrap text-slate-800 ring-1 ring-slate-200">
-                        {c.body}
+                      <p className="mt-1 rounded-2xl rounded-tl-md bg-black/[0.04] px-3.5 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap text-ink">
+                        <MentionText text={c.body} members={members} />
                       </p>
                     </div>
                   </li>
@@ -245,13 +313,13 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
             </Section>
           </div>
 
-          <aside className="space-y-5 text-sm">
+          <aside className="space-y-6 text-sm">
             <Section title="Responsáveis">
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 {members
                   .filter((m) => card.assignee_ids.includes(m.user_id))
                   .map((m) => (
-                    <span key={m.user_id} className="flex items-center gap-1">
+                    <span key={m.user_id} className="flex items-center gap-2 text-ink">
                       <Avatar profile={m.profile} size="sm" /> {displayName(m.profile)}
                     </span>
                   ))}
@@ -268,9 +336,9 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
                         : supabase.from("card_assignees").insert({ card_id: card.id, user_id: id }),
                     );
                   }}
-                  className="mt-1.5 w-full rounded border border-slate-300 bg-white px-1.5 py-1"
+                  className="mt-2 w-full rounded-lg bg-black/[0.05] px-2 py-1.5 text-ink outline-none"
                 >
-                  <option value="">Adicionar / remover…</option>
+                  <option value="">Adicionar ou remover…</option>
                   {members.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
                       {card.assignee_ids.includes(m.user_id) ? "✓ " : ""}
@@ -287,10 +355,10 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
                   type="date"
                   value={card.due_date ?? ""}
                   onChange={(e) => updateCard({ due_date: e.target.value || null })}
-                  className="w-full rounded border border-slate-300 bg-white px-1.5 py-1"
+                  className="w-full rounded-lg bg-black/[0.05] px-2 py-1.5 text-ink outline-none"
                 />
               ) : (
-                <span>{card.due_date ? formatDate(card.due_date) : "Sem data"}</span>
+                <span className="text-ink">{card.due_date ? formatDate(card.due_date) : "Sem data"}</span>
               )}
             </Section>
 
@@ -315,16 +383,35 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
             </Section>
 
             {canEdit && (
-              <button
-                onClick={async () => {
-                  if (!confirm("Apagar este cartão?")) return;
-                  await run(supabase.from("cards").delete().eq("id", card.id));
-                  onClose();
-                }}
-                className="w-full rounded-md bg-red-50 px-3 py-1.5 text-red-700 hover:bg-red-100"
-              >
-                Apagar cartão
-              </button>
+              <Section title="Ações">
+                <div className="flex flex-col gap-2">
+                  {archived ? (
+                    <button onClick={() => updateCard({ archived_at: null })} className={buttonSecondary}>
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        await updateCard({ archived_at: new Date().toISOString() });
+                        onClose();
+                      }}
+                      className={buttonSecondary}
+                    >
+                      Arquivar
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Excluir de vez este cartão? Isso não pode ser desfeito. Para guardar o histórico, use Arquivar.")) return;
+                      await run(supabase.from("cards").delete().eq("id", card.id));
+                      onClose();
+                    }}
+                    className={buttonDanger}
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </Section>
             )}
           </aside>
         </div>
@@ -363,88 +450,175 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
   }
 }
 
+function DescriptionEditor({ value, members, onSave }: { value: string; members: Member[]; onSave: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  const [synced, setSynced] = useState(value);
+  if (synced !== value) {
+    setSynced(value);
+    setDraft(value);
+  }
+  return (
+    <MentionInput
+      value={draft}
+      onChange={setDraft}
+      members={members}
+      rows={4}
+      placeholder="Adicione detalhes, briefing, links… Use @ para mencionar alguém."
+      onBlur={() => draft !== value && onSave(draft)}
+      className={`${inputBase} min-h-24 w-full resize-y leading-relaxed`}
+    />
+  );
+}
+
+function CommentComposer({ members, onSubmit }: { members: Member[]; onSubmit: (body: string) => void }) {
+  const [text, setText] = useState("");
+  function submit() {
+    if (!text.trim()) return;
+    onSubmit(text.trim());
+    setText("");
+  }
+  return (
+    <div>
+      <MentionInput
+        value={text}
+        onChange={setText}
+        members={members}
+        rows={2}
+        placeholder="Escreva um comentário… Use @ para mencionar."
+        onSubmit={submit}
+        className={`${inputBase} w-full resize-y`}
+      />
+      {text.trim() && (
+        <div className="mt-2 flex items-center gap-3">
+          <button onClick={submit} className={`${buttonPrimary} py-1.5`}>
+            Comentar
+          </button>
+          <span className="text-xs text-ink-3">⌘ + Enter para enviar</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChecklistRow({
   item,
   members,
   attachments,
   canEdit,
   canComment,
+  small,
   onToggle,
   onUpdate,
   onDelete,
   onUpload,
   onDownload,
+  onAddSub,
 }: {
   item: ChecklistItem;
   members: Member[];
   attachments: Attachment[];
   canEdit: boolean;
   canComment: boolean;
+  small?: boolean;
   onToggle: (done: boolean) => void;
   onUpdate: (patch: Partial<ChecklistItem>) => void;
   onDelete: () => void;
   onUpload: (file: File) => void;
   onDownload: (a: Attachment) => void;
+  onAddSub?: (title: string) => void;
 }) {
   const assignee = members.find((m) => m.user_id === item.assignee_id);
+  const [addingSub, setAddingSub] = useState(false);
+  const [details, setDetails] = useState(false);
   return (
-    <li className="group rounded-md bg-white px-2 py-1.5 ring-1 ring-slate-200">
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
+    <div className="group rounded-xl px-2 py-1.5 transition hover:bg-black/[0.03]">
+      <div className="flex items-center gap-2.5">
+        <CheckCircle
+          size="sm"
           checked={item.done}
           disabled={!canComment}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="h-4 w-4 accent-teal-700"
+          onChange={onToggle}
+          label={item.done ? "Desmarcar peça" : "Marcar peça como pronta"}
         />
         <EditableText
           value={item.title}
           disabled={!canEdit}
-          className={`min-w-0 flex-1 text-sm ${item.done ? "text-slate-400 line-through" : "text-slate-800"}`}
+          className={`min-w-0 flex-1 ${small ? "text-sm" : "text-[15px]"} ${item.done ? "text-ink-3 line-through" : "text-ink"}`}
           onSave={(title) => title.trim() && onUpdate({ title: title.trim() })}
         />
-        {canEdit && (
-          <button onClick={onDelete} className="text-slate-300 hover:text-red-600 sm:invisible sm:group-hover:visible" aria-label="Remover peça">
-            ✕
-          </button>
-        )}
-      </div>
-      <div className="mt-1 flex flex-wrap items-center gap-2 pl-6 text-xs text-slate-500">
-        {canEdit ? (
-          <>
-            <select
-              value={item.assignee_id ?? ""}
-              onChange={(e) => onUpdate({ assignee_id: e.target.value || null })}
-              className="rounded border border-slate-200 bg-white px-1 py-0.5"
+        {assignee && <Avatar profile={assignee.profile} size="sm" />}
+        {item.due_date && <span className="text-xs text-ink-2">{formatDate(item.due_date)}</span>}
+        {attachments.length > 0 && <span className="text-xs text-ink-2">📎 {attachments.length}</span>}
+        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+          {(canEdit || canComment) && (
+            <button
+              onClick={() => setDetails((v) => !v)}
+              className="rounded-full px-2 py-0.5 text-xs text-ink-2 hover:bg-black/5 hover:text-ink"
+              aria-label="Detalhes da peça"
             >
-              <option value="">Sem responsável</option>
-              {members.map((m) => (
-                <option key={m.user_id} value={m.user_id}>
-                  {displayName(m.profile)}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={item.due_date ?? ""}
-              onChange={(e) => onUpdate({ due_date: e.target.value || null })}
-              className="rounded border border-slate-200 bg-white px-1 py-0.5"
-            />
-          </>
-        ) : (
-          <>
-            {assignee && <span>{displayName(assignee.profile)}</span>}
-            {item.due_date && <span>📅 {formatDate(item.due_date)}</span>}
-          </>
-        )}
-        {attachments.map((a) => (
-          <button key={a.id} onClick={() => onDownload(a)} className="truncate text-teal-700 hover:underline">
-            📎 {a.name}
-          </button>
-        ))}
-        {canComment && <UploadButton onFile={onUpload} label="anexar peça" small />}
+              •••
+            </button>
+          )}
+          {canEdit && (
+            <button onClick={onDelete} className="rounded-full px-1.5 text-ink-3 hover:text-[#d70015]" aria-label="Remover">
+              ×
+            </button>
+          )}
+        </div>
       </div>
-    </li>
+      {details && (
+        <div className="mt-2 ml-7 flex flex-wrap items-center gap-2 text-xs text-ink-2">
+          {canEdit ? (
+            <>
+              <select
+                value={item.assignee_id ?? ""}
+                onChange={(e) => onUpdate({ assignee_id: e.target.value || null })}
+                className="rounded-lg bg-black/[0.05] px-2 py-1 outline-none"
+              >
+                <option value="">Sem responsável</option>
+                {members.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {displayName(m.profile)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={item.due_date ?? ""}
+                onChange={(e) => onUpdate({ due_date: e.target.value || null })}
+                className="rounded-lg bg-black/[0.05] px-2 py-1 outline-none"
+              />
+            </>
+          ) : (
+            assignee && <span>{displayName(assignee.profile)}</span>
+          )}
+          {attachments.map((a) => (
+            <button key={a.id} onClick={() => onDownload(a)} className="max-w-48 truncate text-accent hover:underline">
+              📎 {a.name}
+            </button>
+          ))}
+          {canComment && <UploadButton onFile={onUpload} label="Anexar peça" small />}
+          {onAddSub && (
+            <button onClick={() => setAddingSub(true)} className="text-accent hover:underline">
+              + Sub-item
+            </button>
+          )}
+        </div>
+      )}
+      {addingSub && onAddSub && (
+        <div className="ml-7">
+          <AddInline
+            autoFocus
+            placeholder="Novo sub-item"
+            button="Adicionar"
+            onAdd={(title) => {
+              onAddSub(title);
+            }}
+            onCancel={() => setAddingSub(false)}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -460,14 +634,14 @@ function AttachmentRow({
   onDelete: () => void;
 }) {
   return (
-    <li className="flex items-center gap-2 rounded-md bg-white px-2 py-1.5 text-sm ring-1 ring-slate-200">
-      <button onClick={onDownload} className="min-w-0 flex-1 truncate text-left text-teal-700 hover:underline">
+    <li className="flex items-center gap-2 rounded-xl bg-black/[0.03] px-3 py-2 text-sm">
+      <button onClick={onDownload} className="min-w-0 flex-1 truncate text-left text-accent hover:underline">
         📎 {attachment.name}
       </button>
-      <span className="text-xs text-slate-400">{formatDateTime(attachment.created_at)}</span>
+      <span className="text-xs text-ink-3">{formatDateTime(attachment.created_at)}</span>
       {canDelete && (
-        <button onClick={onDelete} className="text-slate-300 hover:text-red-600" aria-label="Apagar anexo">
-          ✕
+        <button onClick={onDelete} className="text-ink-3 hover:text-[#d70015]" aria-label="Apagar anexo">
+          ×
         </button>
       )}
     </li>
@@ -495,11 +669,7 @@ function UploadButton({ onFile, label, small }: { onFile: (f: File) => void; lab
       <button
         onClick={() => ref.current?.click()}
         disabled={busy}
-        className={
-          small
-            ? "text-slate-500 hover:text-teal-700"
-            : "mt-2 rounded-md bg-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-300"
-        }
+        className={small ? "text-accent hover:underline" : `${buttonSecondary} mt-2.5 py-1.5`}
       >
         {busy ? "Enviando…" : label}
       </button>
@@ -507,10 +677,13 @@ function UploadButton({ onFile, label, small }: { onFile: (f: File) => void; lab
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, aside, children }: { title: string; aside?: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase">{title}</h3>
+      <div className="mb-2 flex items-baseline justify-between">
+        <h3 className="text-[13px] font-semibold text-ink-2">{title}</h3>
+        {aside && <span className="text-xs text-ink-3 tabular-nums">{aside}</span>}
+      </div>
       {children}
     </section>
   );
@@ -520,15 +693,11 @@ function EditableText({
   value,
   onSave,
   disabled,
-  multiline,
-  placeholder,
   className,
 }: {
   value: string;
   onSave: (v: string) => void;
   disabled?: boolean;
-  multiline?: boolean;
-  placeholder?: string;
   className?: string;
 }) {
   const [draft, setDraft] = useState(value);
@@ -540,39 +709,31 @@ function EditableText({
   const commit = () => draft !== value && onSave(draft);
 
   if (disabled) return <span className={className}>{value}</span>;
-  return multiline ? (
-    <textarea
-      value={draft}
-      placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      rows={4}
-      className={className}
-    />
-  ) : (
+  return (
     <input
       value={draft}
-      placeholder={placeholder}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      className={`rounded bg-transparent px-1 outline-none focus:bg-white focus:ring-1 focus:ring-teal-600 ${className ?? ""}`}
+      className={`-mx-1 rounded-lg bg-transparent px-1 outline-none focus:bg-black/[0.03] focus:ring-4 focus:ring-accent/15 ${className ?? ""}`}
     />
   );
 }
 
 function AddInline({
   onAdd,
+  onCancel,
   placeholder,
   button,
-  multiline,
   compact,
+  autoFocus,
 }: {
   onAdd: (text: string) => void;
+  onCancel?: () => void;
   placeholder: string;
   button: string;
-  multiline?: boolean;
   compact?: boolean;
+  autoFocus?: boolean;
 }) {
   const [text, setText] = useState("");
   function submit(e?: React.FormEvent) {
@@ -582,24 +743,21 @@ function AddInline({
     setText("");
   }
   return (
-    <form onSubmit={submit} className={`mt-2 flex gap-2 ${multiline ? "flex-col items-start" : ""}`}>
-      {multiline ? (
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={placeholder}
-          rows={2}
-          className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm"
-        />
-      ) : (
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={placeholder}
-          className={`min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm ${compact ? "text-xs" : ""}`}
-        />
+    <form onSubmit={submit} className="mt-2 flex gap-2">
+      <input
+        value={text}
+        autoFocus={autoFocus}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onCancel?.()}
+        placeholder={placeholder}
+        className={`${inputBase} min-w-0 flex-1 ${compact ? "px-2.5 py-1 text-xs" : "py-1.5 text-sm"}`}
+      />
+      <button className={`${buttonPrimary} ${compact ? "px-3 py-1 text-xs" : "py-1.5"}`}>{button}</button>
+      {onCancel && (
+        <button type="button" onClick={onCancel} className="text-sm text-ink-2 hover:text-ink">
+          Cancelar
+        </button>
       )}
-      <button className="rounded-md bg-teal-700 px-3 py-1 text-sm text-white hover:bg-teal-800">{button}</button>
     </form>
   );
 }

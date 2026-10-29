@@ -32,6 +32,8 @@ export type Card = {
   position: number;
   due_date: string | null;
   labels: string[];
+  archived_at: string | null;
+  completed_at: string | null;
 };
 
 export type CardSummary = Card & {
@@ -45,6 +47,7 @@ export type CardSummary = Card & {
 export type ChecklistItem = {
   id: string;
   card_id: string;
+  parent_id: string | null;
   title: string;
   done: boolean;
   assignee_id: string | null;
@@ -57,6 +60,7 @@ export type Comment = {
   card_id: string;
   author_id: string;
   body: string;
+  mentions: string[];
   created_at: string;
 };
 
