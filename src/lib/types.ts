@@ -30,6 +30,9 @@ export type Card = {
   title: string;
   description: string;
   position: number;
+  /** Data de criação/produção. */
+  start_date: string | null;
+  /** Deadline final do cliente. */
   due_date: string | null;
   labels: string[];
   archived_at: string | null;

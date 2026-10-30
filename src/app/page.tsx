@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/supabase/server";
-import { TopBar } from "@/components/TopBar";
+import { NavLink, TopBar } from "@/components/TopBar";
 import { buttonPrimary, inputBase } from "@/components/ui";
 import type { Board } from "@/lib/types";
 import { createBoard } from "./actions";
@@ -12,7 +12,9 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <TopBar profile={profile} />
+      <TopBar profile={profile}>
+        <NavLink href="/calendario">Calendário</NavLink>
+      </TopBar>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10 sm:px-6">
         <h1 className="text-[32px] font-semibold tracking-tight text-ink">Quadros</h1>
         <p className="mt-1 text-[15px] text-ink-2">Um quadro por cliente ou projeto.</p>

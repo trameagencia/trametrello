@@ -349,17 +349,22 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
               )}
             </Section>
 
-            <Section title="Entrega">
-              {canEdit ? (
-                <input
-                  type="date"
-                  value={card.due_date ?? ""}
-                  onChange={(e) => updateCard({ due_date: e.target.value || null })}
-                  className="w-full rounded-lg bg-black/[0.05] px-2 py-1.5 text-ink outline-none"
+            <Section title="Datas">
+              <div className="space-y-2">
+                <DateField
+                  label="Criação"
+                  hint="quando a equipe produz"
+                  value={card.start_date}
+                  disabled={!canEdit}
+                  onChange={(v) => updateCard({ start_date: v })}
                 />
-              ) : (
-                <span className="text-ink">{card.due_date ? formatDate(card.due_date) : "Sem data"}</span>
-              )}
+                <DateField
+                  label="Deadline do cliente"
+                  value={card.due_date}
+                  disabled={!canEdit}
+                  onChange={(v) => updateCard({ due_date: v })}
+                />
+              </div>
             </Section>
 
             <Section title="Etiquetas">
@@ -448,6 +453,39 @@ export function CardModal({ card, columns, members, permissions, currentUserId, 
     await supabase.storage.from("attachments").remove([a.storage_path]);
     await run(supabase.from("attachments").delete().eq("id", a.id));
   }
+}
+
+function DateField({
+  label,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string | null;
+  disabled: boolean;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs text-ink-2">
+        {label}
+        {hint && <span className="text-ink-3"> · {hint}</span>}
+      </span>
+      {disabled ? (
+        <span className="mt-0.5 block text-ink">{value ? formatDate(value) : "Sem data"}</span>
+      ) : (
+        <input
+          type="date"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+          className="mt-0.5 w-full rounded-lg bg-black/[0.05] px-2 py-1.5 text-ink outline-none"
+        />
+      )}
+    </label>
+  );
 }
 
 function DescriptionEditor({ value, members, onSave }: { value: string; members: Member[]; onSave: (v: string) => void }) {
