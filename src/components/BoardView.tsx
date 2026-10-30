@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -37,6 +38,7 @@ type Props = {
   members: Member[];
   permissions: Permissions;
   currentUserId: string;
+  initialCardId?: string | null;
 };
 
 type Layout = Record<string, string[]>;
@@ -49,11 +51,13 @@ function buildLayout(columns: Column[], cards: CardSummary[]): Layout {
   return layout;
 }
 
-export function BoardView({ board, columns, cards, members, permissions, currentUserId }: Props) {
+export function BoardView({ board, columns, cards, members, permissions, currentUserId, initialCardId }: Props) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [viewAsClient, setViewAsClient] = useState(false);
-  const [openCard, setOpenCard] = useState<{ id: string; archived?: CardSummary } | null>(null);
+  const [openCard, setOpenCard] = useState<{ id: string; archived?: CardSummary } | null>(() =>
+    initialCardId && cards.some((c) => c.id === initialCardId) ? { id: initialCardId } : null,
+  );
   const [showArchived, setShowArchived] = useState(false);
   const [cardMap, setCardMap] = useState(() => new Map(cards.map((c) => [c.id, c])));
   const [layout, setLayout] = useState(() => buildLayout(columns, cards));
@@ -206,6 +210,9 @@ export function BoardView({ board, columns, cards, members, permissions, current
             ))}
           </div>
         )}
+        <Link href={`/calendario?quadro=${board.id}`} className={`${buttonSecondary} py-1.5`}>
+          Calendário
+        </Link>
         <button onClick={() => setShowArchived(true)} className={`${buttonSecondary} py-1.5`}>
           Arquivados
         </button>
@@ -533,10 +540,16 @@ function CardTile({
         </span>
         <p className={`min-w-0 flex-1 leading-snug ${completed ? "text-ink-2" : "text-ink"}`}>{card.title}</p>
       </div>
-      {(card.due_date || card.checklist_total > 0 || card.comment_count > 0 || card.attachment_count > 0 || card.assignee_ids.length > 0) && (
+      {(card.start_date || card.due_date || card.checklist_total > 0 || card.comment_count > 0 || card.attachment_count > 0 || card.assignee_ids.length > 0) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
+          {card.start_date && !completed && (
+            <span className="rounded-full px-2 py-0.5 font-medium text-ink-2 ring-1 ring-black/10 ring-inset" title="Criação">
+              Criação {formatDate(card.start_date)}
+            </span>
+          )}
           {card.due_date && (
             <span
+              title="Deadline do cliente"
               className={`rounded-full px-2 py-0.5 font-medium ${
                 completed ? "bg-[#34c759]/15 text-[#1a7f37]" : overdue ? "bg-[#ff3b30]/12 text-[#d70015]" : "bg-black/[0.05]"
               }`}
